@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.pytest_cache/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Environment & Secrets
+.env
+
+# Local build artifacts
+build/
+dist/

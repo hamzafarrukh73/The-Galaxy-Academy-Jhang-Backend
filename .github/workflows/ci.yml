@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  ci:
+    name: Continuous Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app_db
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Install Project Dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Code Quality (Ruff)
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+
+      - name: Security Audit (Bandit)
+        run: uv run bandit -r apps api config -lll
+
+      - name: Type Check (Mypy)
+        run: uv run mypy .
+
+      - name: Run Tests (Pytest)
+        env:
+          DATABASE_URL: postgres://app_user:password@localhost:5432/app_db
+          REDIS_URL: redis://localhost:6379/1
+          SECRET_KEY: "ci-secret-key"
+          DJANGO_ENV: "production"
+        run: uv run pytest
