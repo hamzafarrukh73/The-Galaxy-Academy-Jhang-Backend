@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Global concurrency: Cancel previous runs if a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Shared CI settings to avoid repetition
+  SECRET_KEY: "ci-secret-key"
+  DJANGO_ENV: "development"
+  AUTH_COOKIE_SECURE: false
+  FRONTEND_BASE_URL: "http://localhost:3000"
+  CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+  SOCIAL_AUTH: false
+  MFA: false
+  REDIS: false
+  SENTRY: false
+  TASKS: false
+  EMAIL: false
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true # Best Practice: Use built-in caching
+      - name: Setup Python
+        run: uv python install 3.13
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+      - name: Linting
+        run: uv run ruff check .
+      - name: Formatting
+        run: uv run ruff format --check .
+      - name: Type Check
+        run: uv run mypy .
+
+  test:
+    needs: lint-and-typecheck # Only run tests if linting passes to save resources
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app_db
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        # Health check ensures DB is ready before steps run
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Setup Python
+        run: uv python install 3.13
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+      - name: Run Tests
+        env:
+          DATABASE_URL: postgres://app_user:password@localhost:5432/app_db
+        run: uv run pytest
